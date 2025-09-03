@@ -153,13 +153,24 @@ func _import(
 		fields_with_type[i] = "%s: %s" % [fields_with_type[i], type_string(types[i])]
 	fa.store_line(member_prefix + "func _make_data(%s) -> %s:" % [", ".join(fields_with_type), data_class])
 	fa.store_line("\tvar ret := %s.%s(%s)" % [data_class, instantiation.split("(")[0], ", ".join(args)])
-	var valid_properties := property_list.map(func(d: Dictionary) -> String: return d["name"]) as PackedStringArray
 	var hinted_fields: PackedStringArray = []
+	
+	var valid_properties :Dictionary = {}
+	for prop in property_list:
+		valid_properties[prop["name"]] = prop
+
 	for f: String in Array(fields).filter(func(f: String) -> bool: return not args.has(f)):
 		if custom_setters.has(f):
 			fa.store_line("\tret.%s(%s)" % [custom_setters[f], f])
 		elif valid_properties.has(f):
-			fa.store_line("\tret.%s = %s" % [f, f])
+			var prop := valid_properties[f] as Dictionary
+			if prop.type == TYPE_ARRAY:
+				fa.store_line("\tret.%s.assign(%s)" % [f, f])
+			elif prop.type == TYPE_DICTIONARY and (Engine.get_version_info().major > 4 or Engine.get_version_info().minor >= 4):
+				# 4.4 以上支持类型化字典
+				fa.store_line("\tret.%s.assign(%s)" % [f, f])
+			else:
+				fa.store_line("\tret.%s = %s" % [f, f])
 		elif not hinted_fields.has(f):
 			# 只提示一次
 			_Log.warning([_Localize.translate("无法被赋值的字段将被跳过: "), f])
